@@ -1,0 +1,28 @@
+# Локальный запуск: docker compose up --build → http://localhost:8080
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: questlog
+      POSTGRES_PASSWORD: questlog
+      POSTGRES_DB: questlog
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U questlog"]
+      interval: 2s
+      retries: 20
+
+  app:
+    build: .
+    environment:
+      PGHOST: db
+      PGUSER: questlog
+      PGPASSWORD: questlog
+      PGDATABASE: questlog
+      PGSSLMODE: disable
+    ports: ["8080:8080"]
+    depends_on:
+      db: {condition: service_healthy}
+
+volumes:
+  pgdata:

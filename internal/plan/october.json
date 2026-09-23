@@ -1,0 +1,123 @@
+{
+  "title": "Октябрьский квест",
+  "gridStart": "2026-09-21",
+  "start": "2026-09-24",
+  "days": 35,
+  "readChapters": 9,
+  "skills": [
+    {"id": "cka", "name": "Кластеромантия", "sub": "CKA и лаба", "glyph": "K"},
+    {"id": "book", "name": "Мудрость", "sub": "Kubernetes in Action", "glyph": "B"},
+    {"id": "eng", "name": "Красноречие", "sub": "English", "glyph": "E"},
+    {"id": "body", "name": "Выносливость", "sub": "тело", "glyph": "+"},
+    {"id": "mind", "name": "Эрудиция", "sub": "кругозор", "glyph": "?"}
+  ],
+  "weeks": [
+    {
+      "id": "w0", "title": "Пролог", "boss": "Страж ворот",
+      "bossDesc": "Не пускает в поход без снаряжения. Слабость: подготовка.",
+      "eng": "Ступенька 1: ответы на арене по-английски письменно",
+      "body": "Просто выйти на прогулку",
+      "mind": "Выбрать книгу или подкаст на первую неделю",
+      "cka": [
+        null, null, null,
+        {"text": "Подготовить оружие: namespace `cka-practice`, `alias k=kubectl` с автодополнением, `export do=\"--dry-run=client -o yaml\"`, в vim `set et ts=2 sw=2`. Потом создать под и деплоймент только командами, без YAML с нуля.", "min": "alias и автодополнение", "tag": "CKA"},
+        {"text": "Разведка лабы после главы 10: `k get sts,pvc -A` — найти StatefulSet Postgres, его headless service и PVC из volumeClaimTemplates. Удалить под Postgres и посмотреть, как он вернётся с тем же именем и тем же диском.", "min": "`k get sts,pvc -A` и описать, что видишь", "tag": "лаба"}
+      ],
+      "topics": ["Namespace cka-practice и алиасы", "Аккаунт на Killercoda", "Снапшот ВМ через virsh проверен", "Anki установлен"],
+      "lab": ["StatefulSet Postgres разобран"]
+    },
+    {
+      "id": "w1", "title": "Рабочие нагрузки", "boss": "Голем бэкапов",
+      "bossDesc": "Охраняет Postgres без бэкапа. Слабость: CronJob с pg_dump.",
+      "eng": "Ступенька 1: письменно рассказать о себе и лабе",
+      "body": "Просто начать: 3 тренировки по 20 минут",
+      "mind": "Мозг и привычки — например, «Атомные привычки» Джеймса Клира",
+      "cka": [
+        {"text": "Скорость в kubectl: алиасы, автодополнение, `--dry-run=client -o yaml`, `k explain`. Deployments: rollout, history, undo.", "min": "Rollout undo на время", "tag": "CKA"},
+        {"text": "pg_dump CronJob в MinIO: манифест CronJob, креды через SealedSecret.", "min": "Черновик CronJob в gitops", "tag": "лаба"},
+        {"text": "ConfigMap и Secret, requests и limits, nodeAffinity, taints и tolerations — в лабе, в namespace cka-practice. Taint потом сними.", "min": "Taint на ноду и под с toleration", "tag": "CKA"},
+        {"text": "Довести pg_dump CronJob: resources, backoffLimit, проверить файл в MinIO, выкатить через ArgoCD.", "min": "`k create job --from=cronjob/…` и глянуть логи", "tag": "лаба"},
+        {"text": "DaemonSet, Job, CronJob, static pods — 5 задач на время.", "min": "2 задачи на время", "tag": "CKA"}
+      ],
+      "topics": ["kubectl на скорость", "ConfigMap / Secret / limits", "Affinity, taints, tolerations", "Job, CronJob, DaemonSet"],
+      "lab": ["pg_dump CronJob в MinIO работает", "Бэкап Postgres виден в MinIO"]
+    },
+    {
+      "id": "w2", "title": "Сеть и хранилище", "boss": "Страж сертификатов",
+      "bossDesc": "Держит ручной wildcard TLS. Слабость: cert-manager.",
+      "eng": "Ступенька 2: читать свои ответы вслух + shadowing",
+      "body": "+ вода: 1,5–2 литра в день",
+      "mind": "История — любой период, который тебе интересен (курсы Arzamas)",
+      "cka": [
+        {"text": "Services, endpoints, CoreDNS: `nslookup` из пода busybox.", "min": "expose и nslookup сервиса", "tag": "CKA"},
+        {"text": "cert-manager: поставить через ArgoCD, завести ClusterIssuer.", "min": "Разобраться, чем Issuer отличается от Certificate", "tag": "лаба"},
+        {"text": "Ingress и Gateway API: Gateway, HTTPRoute — на Killercoda.", "min": "Один HTTPRoute", "tag": "CKA"},
+        {"text": "Перевести ingress лабы на сертификаты cert-manager, убрать ручной wildcard TLS. Заодно включить TLS для questlog.local.", "min": "Один ingress на cert-manager", "tag": "лаба"},
+        {"text": "NetworkPolicy и PV / PVC / StorageClass. NetworkPolicy тренируй на Killercoda: flannel в лабе их не применяет.", "min": "Default deny и PVC", "tag": "CKA"}
+      ],
+      "topics": ["Services и CoreDNS", "Ingress / Gateway API", "NetworkPolicy", "PV, PVC, StorageClass"],
+      "lab": ["cert-manager в ArgoCD", "Ручной wildcard TLS убран"]
+    },
+    {
+      "id": "w3", "title": "Устройство кластера", "boss": "Дракон апгрейда",
+      "bossDesc": "Спит на версии 1.31. Слабость: etcd snapshot и kubeadm upgrade.",
+      "eng": "Ступенька 3: голосовое на 1 минуту с ответом",
+      "body": "+ белок в каждом приёме пищи",
+      "mind": "Космос и наука — научпоп-видео или книга",
+      "cka": [
+        {"text": "kubeadm: init и join, компоненты control plane, static pods — сверь со своим Ansible-плейбуком.", "min": "Найти в плейбуке шаг kubeadm init", "tag": "CKA"},
+        {"text": "etcd на своём control plane: `etcdctl snapshot save` и status. Restore потренируй на Killercoda.", "min": "Сделать snapshot save", "tag": "лаба"},
+        {"text": "RBAC: Role, ClusterRole, bindings, ServiceAccount, `k auth can-i`.", "min": "auth can-i для ServiceAccount", "tag": "CKA"},
+        {"text": "Апгрейд лабы 1.31 → 1.32 через kubeadm. Сначала бэкап Velero и etcd snapshot, потом по нодам: drain → upgrade → uncordon.", "min": "`kubeadm upgrade plan` и план апгрейда в заметках", "tag": "лаба"},
+        {"text": "Helm, Kustomize, CRD и операторы; CNI / CSI / CRI — задачи на время.", "min": "`helm upgrade --install`", "tag": "CKA"}
+      ],
+      "topics": ["kubeadm init / join", "Бэкап и восстановление etcd", "RBAC и ServiceAccount", "Helm, Kustomize, CRD"],
+      "lab": ["etcd snapshot на своём кластере", "Лаба обновлена до 1.32"]
+    },
+    {
+      "id": "w4", "title": "Траблшутинг", "boss": "Демон хаоса",
+      "bossDesc": "Ломает ноды и поды. Слабость: спокойный разбор логов.",
+      "eng": "Ступенька 4: 10 минут голосом с Claude про лабу",
+      "body": "+ сон: ложиться до полуночи",
+      "mind": "Кино и искусство — классический фильм и его разбор",
+      "cka": [
+        {"text": "Поды: CrashLoopBackOff, ImagePullBackOff, Pending — events и logs.", "min": "Починить один сломанный под", "tag": "CKA"},
+        {"text": "Сломать лабу нарочно и починить: сначала `virsh snapshot-create-as` для ВМ, потом остановить kubelet на worker и испортить static pod манифест.", "min": "Остановить и вернуть kubelet на worker02", "tag": "лаба"},
+        {"text": "Сеть: пустые endpoints, неверный selector, не те порты; `k top`, логи control plane.", "min": "Починить сервис без endpoints", "tag": "CKA"},
+        {"text": "Учения по бэкапу: velero restore в отдельный namespace + панель «DR readiness» в Grafana.", "min": "velero restore в тестовый namespace", "tag": "лаба"},
+        {"text": "Пробный экзамен на время (Killercoda или killer.sh) — и решить, когда сдавать.", "min": "3 задачи на время", "tag": "CKA"}
+      ],
+      "topics": ["Сломанные поды", "Сломанные ноды", "Сломанная сеть", "Пробный экзамен и дата сдачи"],
+      "lab": ["Учения по поломкам пройдены", "Restore в отдельный namespace", "Панель DR readiness"]
+    }
+  ],
+  "chapters": [
+    {"n": 1, "title": "Введение"}, {"n": 2, "title": "Первые шаги"}, {"n": 3, "title": "Pods"},
+    {"n": 4, "title": "Репликация"}, {"n": 5, "title": "Services"}, {"n": 6, "title": "Volumes"},
+    {"n": 7, "title": "ConfigMaps и Secrets"}, {"n": 8, "title": "Метаданные и API"}, {"n": 9, "title": "Deployments"},
+    {"n": 10, "title": "StatefulSets", "lab": "После главы: `k get sts -A` в лабе — найди Postgres из Bitnami-чарта, посмотри volumeClaimTemplates и headless service."},
+    {"n": 11, "title": "Внутреннее устройство", "lab": "После главы: загляни в `/etc/kubernetes/manifests` на своём control plane."},
+    {"n": 12, "title": "Защита API-сервера", "lab": "После главы: `k get clusterrolebindings` — кто что может в лабе?"},
+    {"n": 13, "title": "Защита нод и сети", "lab": "Связь с неделей: NetworkPolicy в пятницу."},
+    {"n": 14, "title": "Ресурсы подов", "lab": "После главы: `k top pods -A` — кто в лабе ест больше всех?"},
+    {"n": 15, "title": "Автомасштабирование"},
+    {"n": 16, "title": "Продвинутое планирование", "lab": "Повторение taints и affinity из первой недели."},
+    {"n": 17, "title": "Лучшие практики"},
+    {"n": 18, "title": "Расширение Kubernetes", "lab": "После главы: `k get crd` — сколько CRD принесли ArgoCD, Velero и Longhorn?"}
+  ],
+  "chapterDays": {"0-3": 10, "1-0": 11, "1-3": 12, "2-0": 13, "2-3": 14, "3-0": 15, "3-2": 16, "4-0": 17, "4-3": 18},
+  "eng": [
+    {"text": "Anki 10 минут + выпуск 6 Minute English (BBC Learning English).", "min": "Anki 5 минут"},
+    {"text": "Вопрос на арене в режиме EN — по ступеньке недели: письменно, вслух или голосовым.", "min": "Один вопрос на арене в режиме EN, можно коротко"},
+    {"text": "Прочитать страницу kubernetes.io по сегодняшней теме CKA, выписать 5 слов.", "min": "Один абзац доки"},
+    {"text": "Написать 5–7 предложений по теме недели.", "min": "2 предложения"},
+    {"text": "Видео TechWorld with Nana по теме недели или серия с английскими субтитрами.", "min": "10 минут видео"}
+  ],
+  "bodyTrain": {"text": "Домашняя тренировка 20–30 минут: приседания, выпады, планка, отжимания.", "min": "10 минут зарядки или растяжки"},
+  "bodyWalk": {"text": "Прогулка 40 минут или 7000+ шагов — можно под английский подкаст, два квеста сразу.", "min": "Прогулка 10 минут"},
+  "mind": [
+    {"text": "20 минут по теме недели + одна строчка «что я узнала».", "min": "Одна статья или 5 минут видео"},
+    {"text": "Пересказать 3 интересных факта недели — подруге, в заметки или Claude.", "min": "Один факт"}
+  ],
+  "arenaTopics": ["Linux", "Сети", "Docker", "Kubernetes", "CI/CD", "Terraform и Ansible", "Мониторинг и логи", "Облака", "Git", "Bash и Python", "Безопасность", "О себе и лабе"]
+}

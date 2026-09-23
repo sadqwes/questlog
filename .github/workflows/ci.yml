@@ -1,0 +1,88 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/sadqwes/questlog
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: golang:1.26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: go vet
+        run: go vet ./...
+      - name: Unit tests (race detector)
+        run: go test -race ./...
+
+  # Все проверки безопасности блокирующие: проект стартует чистым и должен таким остаться
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Semgrep (SAST)
+        run: |
+          docker run --rm -v "${PWD}:/src" semgrep/semgrep \
+            semgrep scan --config p/golang --config p/owasp-top-ten --error --metrics=off /src
+
+  sca:
+    runs-on: ubuntu-latest
+    container: golang:1.26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: govulncheck (CVE в зависимостях и stdlib, только достижимые из кода)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  image:
+    needs: [test, sast, sca]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: docker build -t $IMAGE:${GITHUB_SHA::7} -t $IMAGE:latest .
+      - name: Trivy (уязвимости образа, HIGH и CRITICAL блокируют)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+            image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed $IMAGE:${GITHUB_SHA::7}
+      - name: Push
+        run: |
+          docker push $IMAGE:${GITHUB_SHA::7}
+          docker push $IMAGE:latest
+
+  deploy:
+    needs: [image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout platform repo (kvm-k8s-lab)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: sadqwes/kvm-k8s-lab
+          token: ${{ secrets.KVM_LAB_PAT }}
+      - name: Update image tag in gitops
+        run: |
+          TAG=${GITHUB_SHA::7}
+          sed -i "s|image: ghcr.io/sadqwes/questlog:[^ ]*|image: ghcr.io/sadqwes/questlog:$TAG|" \
+            gitops/platform/questlog/deployment.yaml
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@sadqwes.local"
+          git add gitops/platform/questlog/deployment.yaml
+          git commit -m "chore(deploy): questlog $TAG" && git push || echo "no changes to deploy"
