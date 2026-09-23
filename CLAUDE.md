@@ -6,7 +6,7 @@ Claude acts as the **mentor** here: it writes task guides and runs the interview
 ## Reaching the API
 
 - Base URL: `$QUESTLOG_URL` (default `http://localhost:8080` for `make up`; in the lab it is `https://questlog.local`).
-- Authenticate with `-H "Authorization: Bearer $QUESTLOG_TOKEN"` (the API token lives in the `questlog-auth` secret; the user keeps it in `~/.zshrc`). Never print the token, and never write it into files.
+- Authenticate with `-H "Authorization: Bearer $QUESTLOG_TOKEN"` (the API token lives in the `questlog-auth` secret; the user keeps it in `~/.zshrc`). Never print the token, and never write it into files. If `$QUESTLOG_TOKEN` is empty in your shell (the session started before it was added), run the call inside `zsh -ic '…'` so the token is read from `~/.zshrc` without appearing in the transcript. Cluster and LAN calls need the sandbox disabled.
 - Locally (`make up`) the token is `local-dev-token-not-for-production-0001`, and the UI login is questlog / questlog-local.
 - Every write returns the full fresh state, or the entry for arena calls. Errors come back as `{"error": "..."}` in Russian.
 
