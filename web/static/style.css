@@ -241,3 +241,12 @@ body{margin:0}
 .aitem .qtext{font:500 17px/1.4 var(--f);margin:0}
 .aitem .answer{margin:0}
 .hist .guide .answer{margin-bottom:8px}
+input[type=password]{font:inherit;color:var(--ink);background:var(--shadow);border:2px solid var(--line);padding:8px 10px;width:100%}
+input[type=password]:focus{outline:none;border-color:var(--gold)}
+.hero-info{position:relative}
+.logout{position:absolute;top:0;right:0}
+.login-wrap{min-height:100vh;align-content:center;justify-items:center}
+.login{width:100%;max-width:380px;gap:16px}
+.login label{display:grid;gap:6px;font-size:13px;color:var(--muted)}
+.login-title{font:700 24px/1.2 var(--f);margin:0}
+.login .btn.primary{padding:10px 14px}

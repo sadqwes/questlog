@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -339,5 +340,27 @@ func (s *Store) DeleteArena(ctx context.Context, id int64) error {
 	if err == nil && tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
+	return err
+}
+
+// ---------- сессии входа ----------
+
+// CreateSession сохраняет хеш токена и заодно чистит истёкшие сессии.
+func (s *Store) CreateSession(ctx context.Context, tokenHash []byte, expires time.Time) error {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at < now()`); err != nil {
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `INSERT INTO sessions (token_hash, expires_at) VALUES ($1, $2)`, tokenHash, expires)
+	return err
+}
+
+func (s *Store) SessionValid(ctx context.Context, tokenHash []byte) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM sessions WHERE token_hash = $1 AND expires_at > now())`, tokenHash).Scan(&ok)
+	return ok, err
+}
+
+func (s *Store) DeleteSession(ctx context.Context, tokenHash []byte) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash)
 	return err
 }

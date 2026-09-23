@@ -20,7 +20,11 @@ services:
       PGPASSWORD: questlog
       PGDATABASE: questlog
       PGSSLMODE: disable
-    ports: ["8080:8080"]
+      # Только для локального запуска: логин questlog, пароль questlog-local
+      QUESTLOG_USER: questlog
+      QUESTLOG_PASSWORD_HASH: "$$2a$$12$$iNn/IhYRLETxEkjPZ3BGguFGkQh9s4bjM2f0m.rL8UvW1MWj7Qjsa"
+      QUESTLOG_API_TOKEN: local-dev-token-not-for-production-0001
+    ports: ["8080:8080", "9090:9090"]
     depends_on:
       db: {condition: service_healthy}
 

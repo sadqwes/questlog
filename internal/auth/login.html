@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Вход · Октябрьский квест</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main class="wrap login-wrap">
+  <form class="panel login" method="post" action="/login" autocomplete="on">
+    <p class="h">Октябрьский квест</p>
+    <h1 class="login-title">Вход в таверну</h1>
+    {{if .Error}}<p class="err" role="alert">{{.Error}}</p>{{end}}
+    <label for="username">Логин
+      <input type="text" id="username" name="username" value="{{.User}}" autocomplete="username" required autofocus>
+    </label>
+    <label for="password">Пароль
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn primary" type="submit">Войти</button>
+  </form>
+</main>
+</body>
+</html>

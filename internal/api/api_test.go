@@ -109,7 +109,9 @@ func newTestServer(t *testing.T) (*httptest.Server, *memStore) {
 	mem := newMem()
 	web := fstest.MapFS{"index.html": {Data: []byte("<title>questlog</title>")}}
 	srv := New(p, mem, web, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewRegistry())
-	ts := httptest.NewServer(srv.Routes(http.NotFoundHandler()))
+	mux := http.NewServeMux()
+	srv.Register(mux)
+	ts := httptest.NewServer(SecurityHeaders(mux))
 	t.Cleanup(ts.Close)
 	return ts, mem
 }
@@ -195,5 +197,9 @@ func TestServesUI(t *testing.T) {
 	}
 	if resp.Header.Get("Content-Security-Policy") == "" {
 		t.Error("missing CSP header")
+	}
+	// с no-referrer браузер отправляет форму входа с "Origin: null", и CSRF-проверка её отклоняет
+	if rp := resp.Header.Get("Referrer-Policy"); rp != "same-origin" {
+		t.Errorf("Referrer-Policy = %q, want same-origin", rp)
 	}
 }

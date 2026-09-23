@@ -34,6 +34,7 @@
       headers: body ? { 'Content-Type': 'application/json' } : {},
       body: body ? JSON.stringify(body) : undefined,
     });
+    if (r.status === 401) { location.href = '/login'; throw new Error('Сессия закончилась — войди снова'); }
     if (!r.ok) {
       let msg = 'Ошибка ' + r.status;
       try { msg = (await r.json()).error || msg; } catch (e) { /* не JSON */ }

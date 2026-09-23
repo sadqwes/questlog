@@ -4,13 +4,15 @@ metadata:
   name: questlog
   namespace: questlog
   annotations:
-    # Логин и пароль на весь сайт: приложение само авторизацию не делает
-    nginx.ingress.kubernetes.io/auth-type: basic
-    nginx.ingress.kubernetes.io/auth-secret: questlog-basic-auth
-    nginx.ingress.kubernetes.io/auth-realm: "questlog"
+    # Вход — в самом приложении (сессия в cookie), здесь только принудительный https
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 spec:
   ingressClassName: nginx
-  # TLS появится на неделе 2 вместе с cert-manager (босс «Страж сертификатов»)
+  # Без secretName ingress-nginx берёт сертификат по умолчанию: ingress-nginx/tls-wildcard (mkcert).
+  # Перевыпуск — scripts/reissue-wildcard-tls.sh. На неделе 2 заменим на cert-manager.
+  tls:
+    - hosts:
+        - questlog.local
   rules:
     - host: questlog.local
       http:

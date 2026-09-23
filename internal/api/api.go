@@ -82,8 +82,9 @@ func (s *Server) State(ctx context.Context) (State, error) {
 	return State{Plan: s.plan, Calendar: s.plan.Calendar(), Progress: pr, Stats: game.Compute(s.plan, pr)}, nil
 }
 
-func (s *Server) Routes(metrics http.Handler) http.Handler {
-	mux := http.NewServeMux()
+// Register вешает маршруты API и интерфейса на mux. Авторизацию и заголовки безопасности
+// добавляет вызывающий код (main), обернув mux целиком.
+func (s *Server) Register(mux *http.ServeMux) {
 	h := func(pattern string, fn http.HandlerFunc) {
 		_, route, _ := strings.Cut(pattern, " ") // метка route без метода: "/api/marks/{date}/{skill}"
 		mux.Handle(pattern, s.instrument(route, fn))
@@ -91,7 +92,6 @@ func (s *Server) Routes(metrics http.Handler) http.Handler {
 
 	h("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	h("GET /readyz", s.readyz)
-	mux.Handle("GET /metrics", metrics)
 
 	h("GET /api/state", s.getState)
 	h("GET /api/days/{date}", s.getDay)
@@ -109,7 +109,6 @@ func (s *Server) Routes(metrics http.Handler) http.Handler {
 	h("DELETE /api/arena/{id}", s.deleteArena)
 
 	mux.Handle("GET /", http.FileServerFS(s.web))
-	return securityHeaders(mux)
 }
 
 // ---------- handlers ----------
@@ -442,11 +441,13 @@ func (s *Server) instrument(route string, next http.Handler) http.Handler {
 	})
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Referrer-Policy", "no-referrer")
+		// same-origin, а не no-referrer: при no-referrer браузер шлёт формы с "Origin: null",
+		// и проверка CSRF в auth не может узнать свой сайт
+		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
