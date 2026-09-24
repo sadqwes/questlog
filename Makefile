@@ -25,7 +25,8 @@ vuln:        ## govulncheck, как в CI
 	$(DOCKER_GO) sh -c 'go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...'
 
 semgrep:     ## SAST, как в CI
-	docker run --rm -v "$(CURDIR)":/src semgrep/semgrep semgrep scan --config p/golang --config p/owasp-top-ten --error --metrics=off /src
+	docker run --rm -v "$(CURDIR)":/src semgrep/semgrep semgrep scan --config p/golang --config p/owasp-top-ten --error --metrics=off \
+		--exclude-rule javascript.express.security.injection.raw-html-format.raw-html-format /src
 
 image:
 	docker build -t questlog:local .

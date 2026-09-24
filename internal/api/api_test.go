@@ -1,10 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/png"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -99,6 +103,66 @@ func (m *memStore) UpdateArena(_ context.Context, id int64, p store.ArenaPatch) 
 	return model.ArenaEntry{}, store.ErrNotFound
 }
 func (m *memStore) DeleteArena(context.Context, int64) error { return store.ErrNotFound }
+func (m *memStore) Meal(_ context.Context, id int64) (model.Meal, error) {
+	for _, x := range m.p.Meals {
+		if x.ID == id {
+			return x, nil
+		}
+	}
+	return model.Meal{}, store.ErrNotFound
+}
+func (m *memStore) CreateMeal(_ context.Context, meal model.Meal) (model.Meal, error) {
+	m.nextID++
+	meal.ID, meal.Photos = m.nextID, []string{}
+	m.p.Meals = append(m.p.Meals, meal)
+	return meal, nil
+}
+func (m *memStore) UpdateMeal(_ context.Context, id int64, p store.MealPatch) (model.Meal, error) {
+	for i := range m.p.Meals {
+		if m.p.Meals[i].ID == id {
+			if p.Comment != nil {
+				m.p.Meals[i].Comment = *p.Comment
+			}
+			return m.p.Meals[i], nil
+		}
+	}
+	return model.Meal{}, store.ErrNotFound
+}
+func (m *memStore) AddMealPhoto(_ context.Context, id int64, key string) (model.Meal, error) {
+	for i := range m.p.Meals {
+		if m.p.Meals[i].ID == id {
+			m.p.Meals[i].Photos = append(m.p.Meals[i].Photos, key)
+			return m.p.Meals[i], nil
+		}
+	}
+	return model.Meal{}, store.ErrNotFound
+}
+func (m *memStore) DeleteMeal(_ context.Context, id int64) ([]string, error) {
+	for i, x := range m.p.Meals {
+		if x.ID == id {
+			m.p.Meals = append(m.p.Meals[:i], m.p.Meals[i+1:]...)
+			return x.Photos, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+func (m *memStore) SetFoodDay(_ context.Context, day, c string) error {
+	m.p.FoodDays[day] = c
+	return nil
+}
+
+// memPhotos — хранилище фото в памяти.
+type memPhotos struct{ m map[string][]byte }
+
+func (p *memPhotos) Put(_ context.Context, k string, b []byte) error { p.m[k] = b; return nil }
+func (p *memPhotos) Get(_ context.Context, k string) (io.ReadCloser, int64, error) {
+	b, ok := p.m[k]
+	if !ok {
+		return nil, 0, store.ErrNotFound
+	}
+	return io.NopCloser(bytes.NewReader(b)), int64(len(b)), nil
+}
+func (p *memPhotos) Delete(_ context.Context, k string) error { delete(p.m, k); return nil }
 
 func newTestServer(t *testing.T) (*httptest.Server, *memStore) {
 	t.Helper()
@@ -109,6 +173,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *memStore) {
 	mem := newMem()
 	web := fstest.MapFS{"index.html": {Data: []byte("<title>questlog</title>")}}
 	srv := New(p, mem, web, slog.New(slog.NewTextHandler(io.Discard, nil)), prometheus.NewRegistry())
+	srv.WithPhotos(&memPhotos{m: map[string][]byte{}})
 	mux := http.NewServeMux()
 	srv.Register(mux)
 	ts := httptest.NewServer(SecurityHeaders(mux))
@@ -199,7 +264,61 @@ func TestServesUI(t *testing.T) {
 		t.Error("missing CSP header")
 	}
 	// с no-referrer браузер отправляет форму входа с "Origin: null", и CSRF-проверка её отклоняет
+	if cc := resp.Header.Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("static Cache-Control = %q, want no-cache (otherwise a deploy shows the old UI)", cc)
+	}
 	if rp := resp.Header.Get("Referrer-Policy"); rp != "same-origin" {
 		t.Errorf("Referrer-Policy = %q, want same-origin", rp)
+	}
+}
+
+func TestFoodDiaryWithPhoto(t *testing.T) {
+	ts, mem := newTestServer(t)
+	resp, body := do(t, ts, "POST", "/api/meals", `{"day":"2026-09-24","at":"13:30","kind":"lunch","description":"ролл с грудкой","protein":true,"veggies":true}`)
+	if resp.StatusCode != 201 {
+		t.Fatalf("create meal: %d %s", resp.StatusCode, body)
+	}
+	if r, b := do(t, ts, "POST", "/api/meals", `{"day":"24.09","kind":"lunch","description":"x"}`); r.StatusCode != 400 {
+		t.Errorf("bad date accepted: %d %s", r.StatusCode, b)
+	}
+	if r, _ := do(t, ts, "POST", "/api/meals", `{"day":"2026-09-24","kind":"feast","description":"x"}`); r.StatusCode != 400 {
+		t.Errorf("bad kind accepted")
+	}
+
+	// загрузка фото: PNG превращается в JPEG и попадает в хранилище
+	var img bytes.Buffer
+	png.Encode(&img, image.NewRGBA(image.Rect(0, 0, 10, 10)))
+	var form bytes.Buffer
+	mw := multipart.NewWriter(&form)
+	fw, _ := mw.CreateFormFile("photo", "lunch.png")
+	fw.Write(img.Bytes())
+	mw.Close()
+	req, _ := http.NewRequest("POST", ts.URL+"/api/meals/1/photos", &form)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	up, err := http.DefaultClient.Do(req)
+	if err != nil || up.StatusCode != 201 {
+		t.Fatalf("upload: %v %v", err, up.StatusCode)
+	}
+	up.Body.Close()
+	key := mem.p.Meals[0].Photos[0]
+	if r, b := do(t, ts, "GET", "/api/photos/"+key, ""); r.StatusCode != 200 || r.Header.Get("Content-Type") != "image/jpeg" || len(b) == 0 {
+		t.Errorf("get photo: %d %q", r.StatusCode, r.Header.Get("Content-Type"))
+	}
+	if r, _ := do(t, ts, "GET", "/api/photos/../secret.jpg", ""); r.StatusCode == 200 {
+		t.Error("path traversal served a file")
+	}
+
+	_, body = do(t, ts, "GET", "/api/state", "")
+	var st State
+	json.Unmarshal(body, &st)
+	if st.Stats.Counters.Meals != 1 || st.Stats.Counters.FoodDays != 1 {
+		t.Errorf("food counters = %+v", st.Stats.Counters)
+	}
+
+	if r, _ := do(t, ts, "DELETE", "/api/meals/1", ""); r.StatusCode != 204 {
+		t.Errorf("delete meal = %d", r.StatusCode)
+	}
+	if r, _ := do(t, ts, "GET", "/api/photos/"+key, ""); r.StatusCode != 404 {
+		t.Error("photo still served after meal was deleted")
 	}
 }

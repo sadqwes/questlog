@@ -7,114 +7,159 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Press+Start+2P&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="style.css">
 <script src="md.js" defer></script>
 <script src="app.js" defer></script>
 </head>
 <body>
-<div class="wrap">
+<header class="top">
+  <div class="top-in">
+    <a class="me" href="#/me" aria-label="Мой персонаж">
+      <canvas id="spriteSmall" width="16" height="16"></canvas>
+      <span class="me-text">
+        <span class="me-name"><span id="topName">Героиня</span><span class="lvl" id="topLvl">УР 1</span></span>
+        <span class="bar"><i id="topXp"></i></span>
+      </span>
+    </a>
+    <nav class="nav" aria-label="Разделы">
+      <a href="#/today"><span class="dot"></span>Сегодня</a>
+      <a href="#/journey"><span class="dot"></span>Поход</a>
+      <a href="#/arena"><span class="dot"></span>Арена</a>
+      <a href="#/food"><span class="dot"></span>Питание</a>
+      <a href="#/library"><span class="dot"></span>Книги</a>
+      <a href="#/me"><span class="dot"></span>Я</a>
+    </nav>
+  </div>
+</header>
+
+<main>
   <p class="err" id="err" hidden></p>
 
-  <section class="panel hero" aria-label="Персонаж">
-    <div class="sprite-box"><span class="lvl-badge" id="lvlBadge">УР 1</span><canvas id="sprite" width="16" height="16" aria-label="Пиксельный персонаж"></canvas></div>
-    <div class="hero-info">
-      <div>
-        <input id="heroName" type="text" value="Героиня" maxlength="30" autocomplete="off" aria-label="Имя героини">
-        <div class="cls" id="heroClass">Класс: DevOps-странница</div>
+  <!-- ===== Сегодня ===== -->
+  <section data-page="today" class="stack">
+    <div class="card" id="quests" aria-live="polite"></div>
+    <div class="card soft" id="todayFood"></div>
+  </section>
+
+  <!-- ===== Поход ===== -->
+  <section data-page="journey" class="stack" hidden>
+    <div class="page-title"><h1>Поход</h1><span class="sub">24 сентября — 25 октября</span></div>
+    <div class="card">
+      <div class="spread"><h2>Карта</h2>
+        <div class="legend"><span><i></i>пусто</span><span><i class="l1"></i>минимум</span><span><i class="l2"></i>полностью</span></div>
       </div>
-      <form method="post" action="/logout" class="logout"><button class="copy" type="submit">Выйти</button></form>
-      <div>
-        <div class="bar"><i id="xpBar"></i></div>
-        <div class="xpline"><span id="xpText">0 XP</span><span id="xpNext"></span></div>
-      </div>
-      <div class="skills" id="skills"></div>
+      <div class="map" id="map"></div>
+      <p class="muted small">Точки: кластер · мудрость · английский · выносливость · эрудиция. Нажми на день — откроются его квесты.</p>
     </div>
-  </section>
-
-  <section class="panel" aria-label="Законы">
-    <h2 class="h">Законы этого мира</h2>
-    <div class="laws">
-      <div class="law"><b>Минимум даёт опыт</b><span>10 XP за минимум, 25 за полный квест. Маленький шаг — тоже шаг.</span></div>
-      <div class="law"><b>Здесь нельзя умереть</b><span>Пропуски не отнимают опыт и не краснеют. Просто продолжай.</span></div>
-      <div class="law"><b>Выходные — таверна</b><span>Игры и отдых входят в поход. Квесты там — только бонус.</span></div>
-      <div class="law"><b>Карту можно перерисовать</b><span>План — это JSON в git. Не идёт — в пятницу поменяй план, а не себя.</span></div>
-    </div>
-  </section>
-
-  <section class="panel" id="quests" aria-live="polite"></section>
-
-  <section class="panel" id="arena">
-    <div class="spread"><h2 class="h">Арена собеседований</h2><span class="muted small">разбор +15 XP · пробное собеседование +60 XP · по-английски ещё + красноречие</span></div>
-    <div class="steps">
-      <div><b>1. Получи вопросы</b><span class="muted">Напиши в Claude Code — вопросы появятся здесь.</span><button class="copy" data-copy="Задай 3 вопроса на арену questlog — по моим слабым темам">скопировать просьбу</button></div>
-      <div><b>2. Ответь здесь</b><span class="muted">Своими словами, как на собеседовании. «Не знаю» — тоже ответ.</span></div>
-      <div><b>3. Получи разбор</b><span class="muted">Попроси разобрать — оценка и сильный ответ появятся тут.</span><button class="copy" data-copy="Разбери мои ответы на арене questlog">скопировать просьбу</button></div>
-      <div><b>Раз в неделю — пробное собеседование</b><span class="muted">Живой диалог в чате, итог сохранится в истории.</span><button class="copy" data-copy="Проведи пробное собеседование на DevOps и сохрани итог в questlog">скопировать просьбу</button></div>
-    </div>
-    <div><div class="sub">Ждут ответа</div><div class="alist" id="arenaNew"></div></div>
-    <div><div class="sub">Ждут разбора</div><div class="alist" id="arenaWait"></div></div>
-    <div><div class="sub">Темы</div><div class="tstats" id="tstats"></div></div>
-    <div><div class="sub">История</div><div class="hist" id="hist"></div></div>
-  </section>
-
-  <section class="panel">
-    <div class="spread"><h2 class="h">Карта похода</h2>
-      <div class="legend"><span><i></i>пусто</span><span><i class="l1"></i>минимум</span><span><i class="l2"></i>полностью</span></div>
-    </div>
-    <div class="map" id="map"></div>
-    <p class="muted small">Квадратики: кластер · мудрость · английский · выносливость · эрудиция. Нажми на день, чтобы открыть его квесты.</p>
-  </section>
-
-  <section class="panel">
-    <h2 class="h">Боссы недель</h2>
+    <h2>Боссы недель</h2>
     <p class="muted small">У каждой недели свой босс из лабы и тем CKA. Отмечай пункты — у него убывает HP. Не добьёшь — босс подождёт.</p>
     <div class="bosses" id="bosses"></div>
   </section>
 
-  <section class="panel">
-    <div class="spread"><h2 class="h">Библиотека · Kubernetes in Action</h2><span class="muted small">Одна глава за подход · +50 XP к мудрости</span></div>
-    <div class="shelf" id="shelf"></div>
-    <p class="muted small">Нажми на корешок, когда дочитаешь главу. Между главами — короткое повторение, чтобы при перечитывании было на что опереться.</p>
+  <!-- ===== Арена ===== -->
+  <section data-page="arena" class="stack" hidden>
+    <div class="page-title"><h1>Арена собеседований</h1><span class="sub">разбор +15 XP · пробное собеседование +60 XP</span></div>
+    <div class="card">
+      <div class="steps">
+        <div><b>1. Получи вопросы</b><span class="muted small">Напиши в Claude Code — вопросы появятся здесь.</span><button class="copy" data-copy="Задай 3 вопроса на арену questlog — по моим слабым темам">скопировать просьбу</button></div>
+        <div><b>2. Ответь здесь</b><span class="muted small">Своими словами, как на собеседовании. «Не знаю» — тоже ответ.</span></div>
+        <div><b>3. Получи разбор</b><span class="muted small">Оценка и сильный ответ появятся в истории.</span><button class="copy" data-copy="Разбери мои ответы на арене questlog">скопировать просьбу</button></div>
+        <div><b>Раз в неделю</b><span class="muted small">Пробное собеседование в чате, итог сохранится здесь.</span><button class="copy" data-copy="Проведи пробное собеседование на DevOps и сохрани итог в questlog">скопировать просьбу</button></div>
+      </div>
+    </div>
+    <div class="card"><h2>Ждут ответа</h2><div class="alist" id="arenaNew"></div></div>
+    <div class="card"><h2>Ждут разбора</h2><div class="alist" id="arenaWait"></div></div>
+    <div class="card"><h2>Темы</h2><div class="tstats" id="tstats"></div></div>
+    <div class="card"><h2>История</h2><div class="hist" id="hist"></div></div>
   </section>
 
-  <section class="panel">
-    <div class="spread"><h2 class="h">Английский без страха</h2><span class="muted small">по ступеньке в неделю</span></div>
-    <ol class="ladder">
-      <li><span><b>Пролог и неделя 1 — пишу.</b> Отвечаю на вопросы арены по-английски письменно. Никто не слышит.</span></li>
-      <li><span><b>Неделя 2 — читаю вслух.</b> Свой исправленный ответ — вслух 2–3 раза. Shadowing с 6 Minute English.</span></li>
-      <li><span><b>Неделя 3 — записываю себя.</b> Голосовое на 1 минуту с ответом на вопрос арены.</span></li>
-      <li><span><b>Неделя 4 — говорю с Claude.</b> Голосовой режим в приложении Claude: 10 минут про лабу.</span></li>
-      <li><span><b>После похода — живой человек.</b> Tandem или HelloTalk, потом разговорный клуб.</span></li>
-    </ol>
-    <div class="sub">Бесплатно</div>
-    <div class="res">
-      <div><a href="https://www.bbc.co.uk/learningenglish" target="_blank" rel="noopener">BBC Learning English</a><span>6 Minute English — подкасты с текстом, под A2–B1</span></div>
-      <div><a href="https://learningenglish.voanews.com" target="_blank" rel="noopener">VOA Learning English</a><span>Новости медленным английским с текстом</span></div>
-      <div><a href="https://youglish.com" target="_blank" rel="noopener">YouGlish</a><span>Как произносят слово в реальных видео</span></div>
-      <div><a href="https://www.youtube.com/@TechWorldwithNana" target="_blank" rel="noopener">TechWorld with Nana</a><span>DevOps на понятном английском</span></div>
-      <div><a href="https://www.tandem.net" target="_blank" rel="noopener">Tandem</a> · <a href="https://www.hellotalk.com" target="_blank" rel="noopener">HelloTalk</a><span>Обмен языками: сначала переписка</span></div>
-      <div><a href="https://apps.ankiweb.net" target="_blank" rel="noopener">Anki</a><span>Слова из разборов арены — в карточки</span></div>
+  <!-- ===== Питание ===== -->
+  <section data-page="food" class="stack" hidden>
+    <div class="page-title"><h1>Питание</h1><span class="sub">без подсчёта калорий и без чувства вины</span></div>
+    <div class="card soft">
+      <h2>Добавлять, а не запрещать</h2>
+      <div class="plate">
+        <div class="c-cka"><b>Белок</b><span class="small">грудка, яйца, рыба, творог, Teos — в каждый приём пищи</span></div>
+        <div class="c-body"><b>Овощи</b><span class="small">хотя бы горсть: салат, перец, огурец, морковь</span></div>
+        <div class="c-mind"><b>Режим</b><span class="small">не пропускать еду: голод вечером = чипсы</span></div>
+        <div class="c-eng"><b>Без вины</b><span class="small">любая запись — это честность, а не отчёт</span></div>
+      </div>
+    </div>
+    <div class="card" id="foodDay"></div>
+    <div class="card" id="foodAdd"></div>
+    <div class="card" id="foodWeek"></div>
+  </section>
+
+  <!-- ===== Книги ===== -->
+  <section data-page="library" class="stack" hidden>
+    <div class="page-title"><h1>Книги и английский</h1></div>
+    <div class="card">
+      <div class="spread"><h2>Kubernetes in Action</h2><span class="muted small">одна глава за подход · +50 XP к мудрости</span></div>
+      <div class="shelf" id="shelf"></div>
+      <p class="muted small">Нажми на корешок, когда дочитаешь главу. Между главами — короткое повторение.</p>
+    </div>
+    <div class="card">
+      <div class="spread"><h2>Английский без страха</h2><span class="muted small">по ступеньке в неделю</span></div>
+      <ol class="ladder">
+        <li><span><b>Пролог и неделя 1 — пишу.</b> Отвечаю на вопросы арены по-английски письменно. Никто не слышит.</span></li>
+        <li><span><b>Неделя 2 — читаю вслух.</b> Свой исправленный ответ — вслух 2–3 раза. Shadowing с 6 Minute English.</span></li>
+        <li><span><b>Неделя 3 — записываю себя.</b> Голосовое на 1 минуту с ответом на вопрос арены.</span></li>
+        <li><span><b>Неделя 4 — говорю с Claude.</b> Голосовой режим в приложении Claude: 10 минут про лабу.</span></li>
+        <li><span><b>После похода — живой человек.</b> Tandem или HelloTalk, потом разговорный клуб.</span></li>
+      </ol>
+      <div class="label">Бесплатно</div>
+      <div class="res">
+        <div><a href="https://www.bbc.co.uk/learningenglish" target="_blank" rel="noopener">BBC Learning English</a><span>6 Minute English — подкасты с текстом, A2–B1</span></div>
+        <div><a href="https://www.redhat.com/en/command-line-heroes" target="_blank" rel="noopener">Command Line Heroes</a><span>истории про Linux и DevOps — посложнее</span></div>
+        <div><a href="https://youglish.com" target="_blank" rel="noopener">YouGlish</a><span>как произносят слово в реальных видео</span></div>
+        <div><a href="https://www.youtube.com/@TechWorldwithNana" target="_blank" rel="noopener">TechWorld with Nana</a><span>DevOps на понятном английском</span></div>
+        <div><a href="https://www.tandem.net" target="_blank" rel="noopener">Tandem</a> · <a href="https://www.hellotalk.com" target="_blank" rel="noopener">HelloTalk</a><span>обмен языками, сначала переписка</span></div>
+        <div><a href="https://apps.ankiweb.net" target="_blank" rel="noopener">Anki</a><span>колода IT English</span></div>
+      </div>
     </div>
   </section>
 
-  <section class="panel">
-    <h2 class="h">Достижения</h2>
-    <div class="ach" id="ach"></div>
-  </section>
-
-  <section class="panel">
-    <div class="spread"><h2 class="h">Путь к офферу</h2><span class="muted small">DevOps · Минск · $2500 · трудовой договор по ТК РБ</span></div>
-    <div class="next">
-      <div><b>Октябрь — этот поход</b><span class="muted">Все темы CKA, лаба растёт, 10–15 вопросов на арене в неделю, английский до ступеньки 4.</span></div>
-      <div><b>Ноябрь — CKA и пробелы</b><span class="muted">Задачи на время, два симулятора killer.sh, экзамен. На арене: Linux, сети, CI/CD, Docker, облако.</span></div>
-      <div><b>Декабрь — выход на рынок</b><span class="muted">Резюме на русском и английском, LinkedIn, лаба и questlog на GitHub. Пробное собеседование перед каждым живым.</span></div>
-      <div><b>Что уточнять у работодателя</b><span class="muted">Трудовой договор или контракт по ТК РБ с записью в трудовую — не ИП и не договор подряда. Gross или net, валюта выплаты, испытательный срок.</span></div>
+  <!-- ===== Я ===== -->
+  <section data-page="me" class="stack" hidden>
+    <div class="card hero">
+      <canvas id="sprite" width="16" height="16" aria-label="Пиксельный персонаж"></canvas>
+      <div class="stack">
+        <div>
+          <input id="heroName" type="text" value="Героиня" maxlength="30" autocomplete="off" aria-label="Имя героини">
+          <div class="muted small" id="heroClass">Класс: DevOps-странница</div>
+        </div>
+        <div>
+          <div class="bar"><i id="xpBar"></i></div>
+          <div class="xpline"><span id="xpText">0 XP</span><span id="xpNext"></span></div>
+        </div>
+        <div class="skills" id="skills"></div>
+      </div>
     </div>
+    <div class="card"><h2>Достижения</h2><div class="ach" id="ach"></div></div>
+    <div class="card">
+      <h2>Законы этого мира</h2>
+      <div class="laws">
+        <div><b>Минимум даёт опыт</b><span>10 XP за минимум, 25 за полный квест. Маленький шаг — тоже шаг.</span></div>
+        <div><b>Здесь нельзя умереть</b><span>Пропуски не отнимают опыт. Просто продолжай.</span></div>
+        <div><b>Выходные — таверна</b><span>Игры и отдых входят в поход. Квесты там — только бонус.</span></div>
+        <div><b>Карту можно перерисовать</b><span>План — это JSON в git. Не идёт — поменяй план, а не себя.</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="spread"><h2>Путь к офферу</h2><span class="muted small">DevOps · Минск · $2500 · трудовой договор по ТК РБ</span></div>
+      <div class="next">
+        <div><b>Октябрь — этот поход</b><span>Все темы CKA, лаба растёт, арена, английский до ступеньки 4.</span></div>
+        <div><b>Ноябрь — CKA и пробелы</b><span>Задачи на время, killer.sh, экзамен. На арене: Linux, сети, CI/CD, облако.</span></div>
+        <div><b>Декабрь — выход на рынок</b><span>Резюме на двух языках, LinkedIn, лаба и questlog на GitHub.</span></div>
+        <div><b>Что уточнять у работодателя</b><span>Трудовой договор по ТК РБ с записью в трудовую, gross или net, валюта, испытательный срок.</span></div>
+      </div>
+    </div>
+    <form method="post" action="/logout"><button class="btn" type="submit">Выйти</button></form>
   </section>
+</main>
 
-  <footer>Вес здесь не отслеживается каждый день — опыт дают действия, а не цифры на весах. Если хочется, запиши вес раз в неделю в хронике босса.</footer>
-</div>
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-label="Фото"><img id="lightboxImg" alt=""></div>
 <div id="toast" hidden></div>
 </body>
 </html>

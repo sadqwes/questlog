@@ -58,6 +58,22 @@ func (a ArenaEntry) Status() string {
 	}
 }
 
+// Meal — приём пищи в дневнике питания.
+type Meal struct {
+	ID          int64     `json:"id"`
+	Day         string    `json:"day"`
+	At          string    `json:"at"`
+	Kind        string    `json:"kind"` // breakfast, lunch, dinner, snack, drink
+	Description string    `json:"description"`
+	Protein     bool      `json:"protein"`
+	Veggies     bool      `json:"veggies"`
+	Comment     string    `json:"comment"`
+	Photos      []string  `json:"photos"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+var MealKinds = map[string]bool{"breakfast": true, "lunch": true, "dinner": true, "snack": true, "drink": true}
+
 type Progress struct {
 	Marks     map[string]map[string]int   `json:"marks"`     // день → навык → уровень
 	Days      map[string]DayMeta          `json:"days"`      // день → привал и заметка
@@ -67,6 +83,8 @@ type Progress struct {
 	Guides    map[string]map[string]Guide `json:"guides"`    // день → навык → разбор наставника
 	Arena     []ArenaEntry                `json:"arena"`
 	Hero      string                      `json:"hero"`
+	Meals     []Meal                      `json:"meals"`
+	FoodDays  map[string]string           `json:"foodDays"` // день → комментарий наставника
 }
 
 func NewProgress() *Progress {
@@ -78,5 +96,7 @@ func NewProgress() *Progress {
 		Chapters:  map[int]bool{},
 		Guides:    map[string]map[string]Guide{},
 		Arena:     []ArenaEntry{},
+		Meals:     []Meal{},
+		FoodDays:  map[string]string{},
 	}
 }

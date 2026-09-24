@@ -25,3 +25,17 @@ Claude acts as the **mentor** here: it writes task guides and runs the interview
 - `make check` runs everything CI runs (gofmt, vet, race tests, govulncheck, Semgrep, Trivy) in Docker. Go is not installed on the host.
 - The plan content lives in `internal/plan/october.json`. The XP rules are in `internal/game` and are unit-tested.
 - The UI is plain JS with a strict CSP: no inline scripts or style attributes. Widths are set through `data-w`.
+
+## Food diary (nutrition mentor)
+
+The user wants to lose weight **without guilt and without counting calories**. The focus is protein and vegetables at each meal, not skipping meals, and water. Never shame her, never call food "bad", and never suggest restrictive diets. Rule: **add, don't forbid**.
+
+**When she sends food photos or describes a meal in the chat:**
+
+1. Create a meal with `POST /api/meals` and body `{"day":"YYYY-MM-DD","at":"HH:MM","kind":"breakfast|lunch|dinner|snack|drink","description":"...","protein":bool,"veggies":bool,"comment":"<1–3 warm sentences in Russian: what's good, one small addition>"}`.
+2. Upload each photo the chat attached: `curl -H "Authorization: Bearer $QUESTLOG_TOKEN" -F "photo=@<image path from the chat>" $QUESTLOG_URL/api/meals/{id}/photos`. The server shrinks the photo and strips EXIF.
+3. Answer in the chat with what to eat next, built from what she already has at home.
+
+**«Разбери мой день питания за <дата>»** — `GET /api/state`, then look at `progress.meals` for that day. Write the day comment in Markdown with `PUT /api/food-days/{date}` and body `{"comment":"..."}`: `## Что получилось`, `## Что можно добавить` (1–2 concrete foods, not bans), `## Идея на завтра`. Also use `PATCH /api/meals/{id}` with `{"comment":...}` if a meal needs a note.
+
+A photo-less diary still works: without `S3_ENDPOINT` the uploads return 503, but meals are saved.

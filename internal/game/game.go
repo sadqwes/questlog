@@ -21,6 +21,7 @@ const (
 	XPArenaEN = 10 // ...и ещё красноречию, если по-английски
 	XPMock    = 60 // пробное собеседование
 	XPMockEN  = 20
+	XPMeal    = 5 // запись в дневнике питания: честность важнее идеальной тарелки
 	heroBase  = 100
 	skillBase = 40
 )
@@ -86,6 +87,8 @@ type Counters struct {
 	ArenaNew   int  `json:"arenaNew"`     // заданы, ждут ответа
 	Mocks      int  `json:"mocks"`
 	EnAnswers  int  `json:"enAnswers"`
+	Meals      int  `json:"meals"`
+	FoodDays   int  `json:"foodDays"` // дней хотя бы с одной записью
 }
 
 type Stats struct {
@@ -211,6 +214,14 @@ func Compute(p *plan.Plan, pr *model.Progress) Stats {
 		}
 	}
 
+	days := map[string]bool{}
+	for _, m := range pr.Meals {
+		c.Meals++
+		extra += XPMeal
+		days[m.Day] = true
+	}
+	c.FoodDays = len(days)
+
 	total := extra
 	skills := map[string]Bar{}
 	for _, s := range p.Skills {
@@ -251,6 +262,8 @@ func achievements(c Counters) []Achievement {
 		{"ar20", "Q", "Тёртый калач", "20 разобранных вопросов на арене", c.ArenaDone >= 20},
 		{"mock", "I", "Пробный бой", "Пройти пробное собеседование", c.Mocks >= 1},
 		{"brave", "!", "Смелость", "Первый ответ на арене по-английски", c.EnAnswers >= 1},
+		{"meal1", "Ф", "Честная тарелка", "Первая запись в дневнике питания — любая еда считается", c.Meals >= 1},
+		{"meal7", "7", "Неделя дневника", "Записи о еде в 7 разных дней", c.FoodDays >= 7},
 	}
 	out := make([]Achievement, 0, len(list))
 	for _, a := range list {

@@ -31,6 +31,19 @@
         out.push('<pre><code>' + esc(code.join('\n')) + '</code></pre>');
         continue;
       }
+      if (/^\s*>/.test(line)) {
+        // цитата: подряд идущие строки с >, пустая строка с > разделяет абзацы
+        flushPara(); flushList();
+        const paras = [[]];
+        for (; i < lines.length && /^\s*>/.test(lines[i]); i++) {
+          const text = lines[i].replace(/^\s*>\s?/, '');
+          if (text.trim()) paras[paras.length - 1].push(text.trim());
+          else if (paras[paras.length - 1].length) paras.push([]);
+        }
+        i--;
+        out.push('<blockquote>' + paras.filter(p => p.length).map(p => '<p>' + inline(p.join(' ')) + '</p>').join('') + '</blockquote>');
+        continue;
+      }
       const h = line.match(/^(#{1,4})\s+(.*)$/);
       if (h) { flushPara(); flushList(); out.push('<h3>' + inline(h[2]) + '</h3>'); continue; }
       const ul = line.match(/^\s*[-*]\s+(.*)$/);

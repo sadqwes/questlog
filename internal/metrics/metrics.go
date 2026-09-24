@@ -18,7 +18,7 @@ type Collector struct {
 	src Source
 	log *slog.Logger
 
-	up, heroXP, heroLevel, skillXP, skillLevel, bossHP, chapters, arena, topicScore, achievements *prometheus.Desc
+	up, heroXP, heroLevel, skillXP, skillLevel, bossHP, chapters, arena, topicScore, achievements, meals *prometheus.Desc
 }
 
 func New(src Source, log *slog.Logger) *Collector {
@@ -37,11 +37,12 @@ func New(src Source, log *slog.Logger) *Collector {
 		arena:        d("arena_questions", "Interview arena questions by status.", "status"),
 		topicScore:   d("arena_topic_score", "Average interview score per topic, 0-5.", "topic"),
 		achievements: d("achievements_unlocked", "Number of unlocked achievements."),
+		meals:        d("meals_logged", "Meals logged in the food diary."),
 	}
 }
 
 func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
-	for _, d := range []*prometheus.Desc{c.up, c.heroXP, c.heroLevel, c.skillXP, c.skillLevel, c.bossHP, c.chapters, c.arena, c.topicScore, c.achievements} {
+	for _, d := range []*prometheus.Desc{c.up, c.heroXP, c.heroLevel, c.skillXP, c.skillLevel, c.bossHP, c.chapters, c.arena, c.topicScore, c.achievements, c.meals} {
 		ch <- d
 	}
 }
@@ -84,4 +85,5 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		}
 	}
 	g(c.achievements, float64(got))
+	g(c.meals, float64(s.Counters.Meals))
 }

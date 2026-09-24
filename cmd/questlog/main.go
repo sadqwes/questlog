@@ -23,6 +23,7 @@ import (
 	"github.com/sadqwes/questlog/internal/auth"
 	"github.com/sadqwes/questlog/internal/game"
 	"github.com/sadqwes/questlog/internal/metrics"
+	"github.com/sadqwes/questlog/internal/photos"
 	"github.com/sadqwes/questlog/internal/plan"
 	"github.com/sadqwes/questlog/internal/store"
 	"github.com/sadqwes/questlog/web"
@@ -80,6 +81,29 @@ func run(log *slog.Logger) error {
 		s, err := srv.State(ctx)
 		return s.Stats, err
 	}, log))
+
+	// Фото еды — в S3 (MinIO). Без S3_ENDPOINT дневник работает, но без фото.
+	if endpoint := os.Getenv("S3_ENDPOINT"); endpoint != "" {
+		ps, err := photos.NewS3(photos.Config{
+			Endpoint:  endpoint,
+			AccessKey: strings.TrimSpace(os.Getenv("S3_ACCESS_KEY")),
+			SecretKey: strings.TrimSpace(os.Getenv("S3_SECRET_KEY")),
+			Bucket:    envOr("S3_BUCKET", "questlog-photos"),
+			UseSSL:    os.Getenv("S3_USE_SSL") == "true",
+		})
+		if err != nil {
+			return err
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		if err := ps.Check(checkCtx); err != nil {
+			log.Warn("photo storage is not reachable yet, uploads will fail until it is", "err", err)
+		}
+		cancel()
+		srv.WithPhotos(ps)
+		log.Info("photo storage enabled", "endpoint", endpoint)
+	} else {
+		log.Info("photo storage disabled: S3_ENDPOINT is empty")
+	}
 
 	mux := http.NewServeMux()
 	srv.Register(mux)

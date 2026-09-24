@@ -190,6 +190,24 @@ func (s *Store) Snapshot(ctx context.Context) (*model.Progress, error) {
 		return nil, err
 	}
 
+	if p.Meals, err = s.Meals(ctx); err != nil {
+		return nil, err
+	}
+	rows, err = s.pool.Query(ctx, `SELECT to_char(day, 'YYYY-MM-DD'), comment FROM food_days WHERE comment <> ''`)
+	if err != nil {
+		return nil, err
+	}
+	if err := eachRow(rows, func() error {
+		var day, c string
+		if err := rows.Scan(&day, &c); err != nil {
+			return err
+		}
+		p.FoodDays[day] = c
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
 	err = s.pool.QueryRow(ctx, `SELECT value FROM settings WHERE key = 'hero'`).Scan(&p.Hero)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
@@ -362,5 +380,92 @@ func (s *Store) SessionValid(ctx context.Context, tokenHash []byte) (bool, error
 
 func (s *Store) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash)
+	return err
+}
+
+// ---------- дневник питания ----------
+
+const mealCols = `id, to_char(day, 'YYYY-MM-DD'), at, kind, description, protein, veggies, comment, photos, created_at`
+
+func scanMeal(row pgx.Row) (model.Meal, error) {
+	var m model.Meal
+	err := row.Scan(&m.ID, &m.Day, &m.At, &m.Kind, &m.Description, &m.Protein, &m.Veggies, &m.Comment, &m.Photos, &m.CreatedAt)
+	if m.Photos == nil {
+		m.Photos = []string{}
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return m, ErrNotFound
+	}
+	return m, err
+}
+
+func (s *Store) Meals(ctx context.Context) ([]model.Meal, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+mealCols+` FROM meals ORDER BY day, at, id`)
+	if err != nil {
+		return nil, err
+	}
+	out := []model.Meal{}
+	err = eachRow(rows, func() error {
+		m, err := scanMeal(rows)
+		out = append(out, m)
+		return err
+	})
+	return out, err
+}
+
+func (s *Store) Meal(ctx context.Context, id int64) (model.Meal, error) {
+	return scanMeal(s.pool.QueryRow(ctx, `SELECT `+mealCols+` FROM meals WHERE id = $1`, id))
+}
+
+func (s *Store) CreateMeal(ctx context.Context, m model.Meal) (model.Meal, error) {
+	return scanMeal(s.pool.QueryRow(ctx, `
+		INSERT INTO meals (day, at, kind, description, protein, veggies, comment)
+		VALUES ($1::date, $2, $3, $4, $5, $6, $7)
+		RETURNING `+mealCols, m.Day, m.At, m.Kind, m.Description, m.Protein, m.Veggies, m.Comment))
+}
+
+// MealPatch: nil-поля не меняются.
+type MealPatch struct {
+	At          *string `json:"at"`
+	Kind        *string `json:"kind"`
+	Description *string `json:"description"`
+	Protein     *bool   `json:"protein"`
+	Veggies     *bool   `json:"veggies"`
+	Comment     *string `json:"comment"`
+}
+
+func (s *Store) UpdateMeal(ctx context.Context, id int64, p MealPatch) (model.Meal, error) {
+	return scanMeal(s.pool.QueryRow(ctx, `
+		UPDATE meals SET
+			at          = COALESCE($2, at),
+			kind        = COALESCE($3, kind),
+			description = COALESCE($4, description),
+			protein     = COALESCE($5, protein),
+			veggies     = COALESCE($6, veggies),
+			comment     = COALESCE($7, comment)
+		WHERE id = $1
+		RETURNING `+mealCols, id, p.At, p.Kind, p.Description, p.Protein, p.Veggies, p.Comment))
+}
+
+func (s *Store) AddMealPhoto(ctx context.Context, id int64, key string) (model.Meal, error) {
+	return scanMeal(s.pool.QueryRow(ctx, `
+		UPDATE meals SET photos = array_append(photos, $2) WHERE id = $1
+		RETURNING `+mealCols, id, key))
+}
+
+// DeleteMeal удаляет запись и возвращает её фото, чтобы вызывающий удалил их из хранилища.
+func (s *Store) DeleteMeal(ctx context.Context, id int64) ([]string, error) {
+	var photos []string
+	err := s.pool.QueryRow(ctx, `DELETE FROM meals WHERE id = $1 RETURNING photos`, id).Scan(&photos)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return photos, err
+}
+
+func (s *Store) SetFoodDay(ctx context.Context, day, comment string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO food_days (day, comment) VALUES ($1::date, $2)
+		ON CONFLICT (day) DO UPDATE SET comment = EXCLUDED.comment, updated_at = now()`, day, comment)
 	return err
 }

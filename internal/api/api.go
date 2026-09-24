@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/sadqwes/questlog/internal/game"
 	"github.com/sadqwes/questlog/internal/model"
+	"github.com/sadqwes/questlog/internal/photos"
 	"github.com/sadqwes/questlog/internal/plan"
 	"github.com/sadqwes/questlog/internal/store"
 )
@@ -37,13 +39,20 @@ type Store interface {
 	CreateArena(ctx context.Context, a model.ArenaEntry) (model.ArenaEntry, error)
 	UpdateArena(ctx context.Context, id int64, p store.ArenaPatch) (model.ArenaEntry, error)
 	DeleteArena(ctx context.Context, id int64) error
+	Meal(ctx context.Context, id int64) (model.Meal, error)
+	CreateMeal(ctx context.Context, m model.Meal) (model.Meal, error)
+	UpdateMeal(ctx context.Context, id int64, p store.MealPatch) (model.Meal, error)
+	AddMealPhoto(ctx context.Context, id int64, key string) (model.Meal, error)
+	DeleteMeal(ctx context.Context, id int64) ([]string, error)
+	SetFoodDay(ctx context.Context, day, comment string) error
 }
 
 type Server struct {
-	plan  *plan.Plan
-	store Store
-	log   *slog.Logger
-	web   fs.FS
+	plan   *plan.Plan
+	store  Store
+	log    *slog.Logger
+	web    fs.FS
+	photos photos.Store // nil — фото отключены (не настроен S3)
 
 	requests *prometheus.CounterVec
 	latency  *prometheus.HistogramVec
@@ -65,6 +74,9 @@ func New(p *plan.Plan, s Store, web fs.FS, log *slog.Logger, reg prometheus.Regi
 	reg.MustRegister(srv.requests, srv.latency)
 	return srv
 }
+
+// WithPhotos включает загрузку фото еды.
+func (s *Server) WithPhotos(ps photos.Store) { s.photos = ps }
 
 // State — всё, что нужно интерфейсу для отрисовки.
 type State struct {
@@ -107,8 +119,19 @@ func (s *Server) Register(mux *http.ServeMux) {
 	h("POST /api/arena", s.createArena)
 	h("PATCH /api/arena/{id}", s.patchArena)
 	h("DELETE /api/arena/{id}", s.deleteArena)
+	h("POST /api/meals", s.createMeal)
+	h("PATCH /api/meals/{id}", s.patchMeal)
+	h("DELETE /api/meals/{id}", s.deleteMeal)
+	h("POST /api/meals/{id}/photos", s.uploadPhoto)
+	h("GET /api/photos/{key...}", s.getPhoto)
+	h("PUT /api/food-days/{date}", s.putFoodDay)
 
-	mux.Handle("GET /", http.FileServerFS(s.web))
+	// no-cache: браузер каждый раз сверяется с сервером — после деплоя сразу новый интерфейс, а не старый из кеша
+	static := http.FileServerFS(s.web)
+	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		static.ServeHTTP(w, r)
+	}))
 }
 
 // ---------- handlers ----------
@@ -372,6 +395,182 @@ func (s *Server) deleteArena(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ---------- питание ----------
+
+func validDate(d string) bool {
+	_, err := time.Parse(plan.DateLayout, d)
+	return err == nil
+}
+
+func (s *Server) createMeal(w http.ResponseWriter, r *http.Request) {
+	var m model.Meal
+	if !s.decode(w, r, &m) {
+		return
+	}
+	switch {
+	case !validDate(m.Day):
+		s.fail(w, r, http.StatusBadRequest, "day в формате YYYY-MM-DD")
+		return
+	case !model.MealKinds[m.Kind]:
+		s.fail(w, r, http.StatusBadRequest, "kind: breakfast, lunch, dinner, snack или drink")
+		return
+	case strings.TrimSpace(m.Description) == "" || len(m.Description) > 2000 || len(m.At) > 16 || len(m.Comment) > 8000:
+		s.fail(w, r, http.StatusBadRequest, "описание пустое или слишком длинное")
+		return
+	}
+	created, err := s.store.CreateMeal(r.Context(), m)
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) mealID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		s.fail(w, r, http.StatusBadRequest, "id должен быть числом")
+		return 0, false
+	}
+	return id, true
+}
+
+func (s *Server) patchMeal(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.mealID(w, r)
+	if !ok {
+		return
+	}
+	var p store.MealPatch
+	if !s.decode(w, r, &p) {
+		return
+	}
+	if p.Kind != nil && !model.MealKinds[*p.Kind] {
+		s.fail(w, r, http.StatusBadRequest, "kind: breakfast, lunch, dinner, snack или drink")
+		return
+	}
+	m, err := s.store.UpdateMeal(r.Context(), id, p)
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, r, http.StatusNotFound, "нет такой записи")
+		return
+	}
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+func (s *Server) deleteMeal(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.mealID(w, r)
+	if !ok {
+		return
+	}
+	keys, err := s.store.DeleteMeal(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, r, http.StatusNotFound, "нет такой записи")
+		return
+	}
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, k := range keys {
+		if s.photos == nil {
+			break
+		}
+		if err := s.photos.Delete(r.Context(), k); err != nil {
+			s.log.Warn("photo delete failed", "key", k, "err", err) // запись уже удалена — фото уберём вручную
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	if s.photos == nil {
+		s.fail(w, r, http.StatusServiceUnavailable, "хранилище фото не настроено")
+		return
+	}
+	id, ok := s.mealID(w, r)
+	if !ok {
+		return
+	}
+	if _, err := s.store.Meal(r.Context(), id); errors.Is(err, store.ErrNotFound) {
+		s.fail(w, r, http.StatusNotFound, "нет такой записи")
+		return
+	} else if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, photos.MaxUpload+(1<<20))
+	file, _, err := r.FormFile("photo")
+	if err != nil {
+		s.fail(w, r, http.StatusBadRequest, "нужен файл в поле photo, не больше 15 МБ")
+		return
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(file)
+	if err != nil {
+		s.fail(w, r, http.StatusBadRequest, "файл не прочитался")
+		return
+	}
+	jpg, err := photos.Normalize(raw)
+	if errors.Is(err, photos.ErrNotImage) {
+		s.fail(w, r, http.StatusBadRequest, "это не фото: нужен JPEG, PNG или WebP")
+		return
+	} else if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	key := photos.NewKey(id)
+	if err := s.photos.Put(r.Context(), key, jpg); err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	m, err := s.store.AddMealPhoto(r.Context(), id, key)
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, m)
+}
+
+func (s *Server) getPhoto(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("key")
+	if s.photos == nil || !photos.ValidKey(key) {
+		http.NotFound(w, r)
+		return
+	}
+	body, size, err := s.photos.Get(r.Context(), key)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer body.Close()
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	w.Header().Set("Cache-Control", "private, max-age=604800, immutable") // ключ случайный и не меняется
+	io.Copy(w, body)
+}
+
+func (s *Server) putFoodDay(w http.ResponseWriter, r *http.Request) {
+	date := r.PathValue("date")
+	if !validDate(date) {
+		s.fail(w, r, http.StatusBadRequest, "день в формате YYYY-MM-DD")
+		return
+	}
+	var body struct {
+		Comment string `json:"comment"`
+	}
+	if !s.decode(w, r, &body) {
+		return
+	}
+	if len(body.Comment) > 16000 {
+		s.fail(w, r, http.StatusBadRequest, "комментарий слишком длинный")
+		return
+	}
+	s.write(w, r, s.store.SetFoodDay(r.Context(), date, body.Comment))
+}
+
 // ---------- helpers ----------
 
 func (s *Server) activeDay(date string) bool {
@@ -448,7 +647,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		// same-origin, а не no-referrer: при no-referrer браузер шлёт формы с "Origin: null",
 		// и проверка CSRF в auth не может узнать свой сайт
 		h.Set("Referrer-Policy", "same-origin")
-		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }
