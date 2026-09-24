@@ -50,6 +50,7 @@ code{font-family:var(--mono);font-size:.86em;background:var(--soft);border:1px s
 .nav a:hover{background:var(--surface);border-color:var(--line)}
 .nav a[aria-current="page"]{background:var(--primary);color:var(--primary-ink)}
 .nav .dot{display:none}
+.top-logout{margin:0}
 main{max-width:1000px;margin:0 auto;padding:22px 16px 96px;display:grid;gap:18px}
 .page-title{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
 .page-title h1{font-size:28px}

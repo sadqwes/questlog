@@ -15,22 +15,33 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type memSessions struct {
-	mu sync.Mutex
-	m  map[string]time.Time
+type memSession struct {
+	fp  string
+	exp time.Time
 }
 
-func (s *memSessions) CreateSession(_ context.Context, h []byte, exp time.Time) error {
+type memSessions struct {
+	mu sync.Mutex
+	m  map[string]memSession
+}
+
+func (s *memSessions) CreateSession(_ context.Context, h []byte, fp string, exp time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[string(h)] = exp
+	s.m[string(h)] = memSession{fp, exp}
 	return nil
 }
-func (s *memSessions) SessionValid(_ context.Context, h []byte) (bool, error) {
+func (s *memSessions) SessionValid(_ context.Context, h []byte, fp string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	exp, ok := s.m[string(h)]
-	return ok && exp.After(time.Now()), nil
+	x, ok := s.m[string(h)]
+	return ok && x.fp == fp && x.exp.After(time.Now()), nil
+}
+func (s *memSessions) DeleteAllSessions(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m = map[string]memSession{}
+	return nil
 }
 func (s *memSessions) DeleteSession(_ context.Context, h []byte) error {
 	s.mu.Lock()
@@ -47,8 +58,12 @@ const (
 
 func newTestAuth(t *testing.T) (*httptest.Server, *memSessions) {
 	t.Helper()
-	hash, _ := bcrypt.GenerateFromPassword([]byte(testPass), bcrypt.MinCost) // MinCost — чтобы тесты были быстрыми
-	sessions := &memSessions{m: map[string]time.Time{}}
+	return newTestAuthWith(t, testPass, &memSessions{m: map[string]memSession{}})
+}
+
+func newTestAuthWith(t *testing.T, password string, sessions *memSessions) (*httptest.Server, *memSessions) {
+	t.Helper()
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost) // MinCost — чтобы тесты были быстрыми
 	a, err := New(Config{User: testUser, PasswordHash: string(hash), APIToken: testToken}, sessions, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +199,7 @@ func TestCrossOriginWriteBlocked(t *testing.T) {
 
 func TestNewRejectsWeakConfig(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	s := &memSessions{m: map[string]time.Time{}}
+	s := &memSessions{m: map[string]memSession{}}
 	if _, err := New(Config{User: "u", PasswordHash: "plain-text"}, s, log); err == nil {
 		t.Error("plain password accepted as hash")
 	}
@@ -207,5 +222,47 @@ func TestNullOriginRejected(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 403 {
 		t.Errorf("Origin: null login = %d, want 403", resp.StatusCode)
+	}
+}
+
+func sessionCookie(t *testing.T, resp *http.Response) *http.Cookie {
+	t.Helper()
+	for _, c := range resp.Cookies() {
+		if c.Name == cookieName {
+			return c
+		}
+	}
+	t.Fatal("no session cookie")
+	return nil
+}
+
+func TestPasswordChangeInvalidatesSessions(t *testing.T) {
+	sessions := &memSessions{m: map[string]memSession{}}
+	ts, _ := newTestAuthWith(t, testPass, sessions)
+	c := sessionCookie(t, login(t, ts, testUser, testPass))
+	if r := get(t, ts, "GET", "/api/state", func(r *http.Request) { r.AddCookie(c) }); r.StatusCode != 200 {
+		t.Fatalf("session before password change = %d", r.StatusCode)
+	}
+	// тот же набор сессий, но сервис перезапущен с новым паролем
+	ts2, _ := newTestAuthWith(t, "a brand new password", sessions)
+	if r := get(t, ts2, "GET", "/api/state", func(r *http.Request) { r.AddCookie(c) }); r.StatusCode != 401 {
+		t.Errorf("old session after password change = %d, want 401", r.StatusCode)
+	}
+}
+
+func TestLogoutEverywhere(t *testing.T) {
+	ts, sessions := newTestAuth(t)
+	laptop := sessionCookie(t, login(t, ts, testUser, testPass))
+	phone := sessionCookie(t, login(t, ts, testUser, testPass))
+	resp := get(t, ts, "POST", "/logout-all", func(r *http.Request) { r.AddCookie(laptop); r.Header.Set("Origin", ts.URL) })
+	if resp.StatusCode != 303 || len(sessions.m) != 0 {
+		t.Fatalf("logout-all = %d, sessions left %d", resp.StatusCode, len(sessions.m))
+	}
+	if r := get(t, ts, "GET", "/api/state", func(r *http.Request) { r.AddCookie(phone) }); r.StatusCode != 401 {
+		t.Errorf("phone session after logout-all = %d, want 401", r.StatusCode)
+	}
+	// без входа выйти везде нельзя — иначе любой в сети мог бы всех разлогинить
+	if r := get(t, ts, "POST", "/logout-all", func(r *http.Request) { r.Header.Set("Origin", ts.URL) }); r.StatusCode != 303 || r.Header.Get("Location") != "/login" {
+		t.Errorf("anonymous logout-all = %d %q", r.StatusCode, r.Header.Get("Location"))
 	}
 }

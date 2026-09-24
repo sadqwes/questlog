@@ -9,6 +9,7 @@ import (
 	"crypto/subtle"
 	_ "embed"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"html/template"
 	"log/slog"
@@ -30,9 +31,10 @@ const (
 
 // Sessions — хранилище сессий; в базе лежит только SHA-256 от токена.
 type Sessions interface {
-	CreateSession(ctx context.Context, tokenHash []byte, expires time.Time) error
-	SessionValid(ctx context.Context, tokenHash []byte) (bool, error)
+	CreateSession(ctx context.Context, tokenHash []byte, passwordFP string, expires time.Time) error
+	SessionValid(ctx context.Context, tokenHash []byte, passwordFP string) (bool, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
+	DeleteAllSessions(ctx context.Context) error
 }
 
 type Config struct {
@@ -48,6 +50,7 @@ type Auth struct {
 	log      *slog.Logger
 	limiter  *limiter
 	page     *template.Template
+	fp       string // отпечаток текущего пароля: сменили пароль — старые сессии недействительны
 }
 
 //go:embed login.html
@@ -70,7 +73,14 @@ func New(cfg Config, s Sessions, log *slog.Logger) (*Auth, error) {
 		cfg: cfg, sessions: s, log: log,
 		limiter: newLimiter(maxFailures, lockout),
 		page:    template.Must(template.New("login").Parse(loginHTML)),
+		fp:      passwordFingerprint(cfg.PasswordHash),
 	}, nil
+}
+
+// passwordFingerprint — первые 8 байт SHA-256 от bcrypt-хеша. Сам хеш в таблицу сессий не попадает.
+func passwordFingerprint(hash string) string {
+	sum := sha256.Sum256([]byte(hash))
+	return hex.EncodeToString(sum[:8])
 }
 
 // HashPassword — для команды `questlog hash-password`.
@@ -83,6 +93,7 @@ func (a *Auth) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /login", a.loginPage)
 	mux.HandleFunc("POST /login", a.login)
 	mux.HandleFunc("POST /logout", a.logout)
+	mux.HandleFunc("POST /logout-all", a.logoutAll)
 }
 
 // Пути, доступные без входа: сама страница входа, её стили и пробы Kubernetes.
@@ -130,7 +141,7 @@ func (a *Auth) sessionOK(r *http.Request) bool {
 	if err != nil || c.Value == "" {
 		return false
 	}
-	ok, err := a.sessions.SessionValid(r.Context(), hashToken(c.Value))
+	ok, err := a.sessions.SessionValid(r.Context(), hashToken(c.Value), a.fp)
 	if err != nil {
 		a.log.Error("session lookup failed", "err", err)
 		return false
@@ -183,7 +194,7 @@ func (a *Auth) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expires := time.Now().Add(a.cfg.SessionTTL)
-	if err := a.sessions.CreateSession(r.Context(), hashToken(token), expires); err != nil {
+	if err := a.sessions.CreateSession(r.Context(), hashToken(token), a.fp, expires); err != nil {
 		a.log.Error("session create failed", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -199,6 +210,24 @@ func (a *Auth) logout(w http.ResponseWriter, r *http.Request) {
 			a.log.Error("session delete failed", "err", err)
 		}
 	}
+	c := a.cookie("", time.Unix(0, 0))
+	c.MaxAge = -1
+	http.SetCookie(w, c)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// logoutAll удаляет все сессии — например, если потерялся телефон. Доступен только после входа (Protect).
+func (a *Auth) logoutAll(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "cross-origin request blocked", http.StatusForbidden)
+		return
+	}
+	if err := a.sessions.DeleteAllSessions(r.Context()); err != nil {
+		a.log.Error("delete all sessions failed", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	a.log.Info("logged out everywhere", "ip", clientIP(r))
 	c := a.cookie("", time.Unix(0, 0))
 	c.MaxAge = -1
 	http.SetCookie(w, c)

@@ -30,6 +30,7 @@
       <a href="#/library"><span class="dot"></span>Книги</a>
       <a href="#/me"><span class="dot"></span>Я</a>
     </nav>
+    <form method="post" action="/logout" class="top-logout"><button class="copy" type="submit">Выйти</button></form>
   </div>
 </header>
 
@@ -155,7 +156,14 @@
         <div><b>Что уточнять у работодателя</b><span>Трудовой договор по ТК РБ с записью в трудовую, gross или net, валюта, испытательный срок.</span></div>
       </div>
     </div>
-    <form method="post" action="/logout"><button class="btn" type="submit">Выйти</button></form>
+    <div class="card">
+      <h2>Вход и безопасность</h2>
+      <p class="muted small">Сессия живёт 30 дней и переживает обновления questlog. Смена пароля выкидывает со всех устройств автоматически.</p>
+      <div class="row">
+        <form method="post" action="/logout"><button class="btn" type="submit">Выйти</button></form>
+        <form method="post" action="/logout-all"><button class="btn danger" type="submit">Выйти на всех устройствах</button></form>
+      </div>
+    </div>
   </section>
 </main>
 

@@ -364,18 +364,26 @@ func (s *Store) DeleteArena(ctx context.Context, id int64) error {
 // ---------- сессии входа ----------
 
 // CreateSession сохраняет хеш токена и заодно чистит истёкшие сессии.
-func (s *Store) CreateSession(ctx context.Context, tokenHash []byte, expires time.Time) error {
+func (s *Store) CreateSession(ctx context.Context, tokenHash []byte, passwordFP string, expires time.Time) error {
 	if _, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at < now()`); err != nil {
 		return err
 	}
-	_, err := s.pool.Exec(ctx, `INSERT INTO sessions (token_hash, expires_at) VALUES ($1, $2)`, tokenHash, expires)
+	_, err := s.pool.Exec(ctx, `INSERT INTO sessions (token_hash, password_fp, expires_at) VALUES ($1, $2, $3)`, tokenHash, passwordFP, expires)
 	return err
 }
 
-func (s *Store) SessionValid(ctx context.Context, tokenHash []byte) (bool, error) {
+// SessionValid: сессия жива, не истекла и создана при текущем пароле.
+func (s *Store) SessionValid(ctx context.Context, tokenHash []byte, passwordFP string) (bool, error) {
 	var ok bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM sessions WHERE token_hash = $1 AND expires_at > now())`, tokenHash).Scan(&ok)
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM sessions
+		WHERE token_hash = $1 AND password_fp = $2 AND expires_at > now())`, tokenHash, passwordFP).Scan(&ok)
 	return ok, err
+}
+
+// DeleteAllSessions — «выйти на всех устройствах».
+func (s *Store) DeleteAllSessions(ctx context.Context) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM sessions`)
+	return err
 }
 
 func (s *Store) DeleteSession(ctx context.Context, tokenHash []byte) error {
