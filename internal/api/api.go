@@ -45,6 +45,7 @@ type Store interface {
 	AddMealPhoto(ctx context.Context, id int64, key string) (model.Meal, error)
 	DeleteMeal(ctx context.Context, id int64) ([]string, error)
 	SetFoodDay(ctx context.Context, day, comment string) error
+	SetWater(ctx context.Context, day string, glasses int) error
 }
 
 type Server struct {
@@ -125,6 +126,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	h("POST /api/meals/{id}/photos", s.uploadPhoto)
 	h("GET /api/photos/{key...}", s.getPhoto)
 	h("PUT /api/food-days/{date}", s.putFoodDay)
+	h("PUT /api/food-days/{date}/water", s.putWater)
 
 	// no-cache: браузер каждый раз сверяется с сервером — после деплоя сразу новый интерфейс, а не старый из кеша
 	static := http.FileServerFS(s.web)
@@ -569,6 +571,25 @@ func (s *Server) putFoodDay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.write(w, r, s.store.SetFoodDay(r.Context(), date, body.Comment))
+}
+
+func (s *Server) putWater(w http.ResponseWriter, r *http.Request) {
+	date := r.PathValue("date")
+	if !validDate(date) {
+		s.fail(w, r, http.StatusBadRequest, "день в формате YYYY-MM-DD")
+		return
+	}
+	var body struct {
+		Glasses int `json:"glasses"`
+	}
+	if !s.decode(w, r, &body) {
+		return
+	}
+	if body.Glasses < 0 || body.Glasses > 30 {
+		s.fail(w, r, http.StatusBadRequest, "стаканов от 0 до 30")
+		return
+	}
+	s.write(w, r, s.store.SetWater(r.Context(), date, body.Glasses))
 }
 
 // ---------- helpers ----------

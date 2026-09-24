@@ -167,7 +167,13 @@
   </section>
 </main>
 
-<div class="lightbox" id="lightbox" hidden role="dialog" aria-label="Фото"><img id="lightboxImg" alt=""></div>
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Фото">
+  <button class="lb-btn lb-close" data-lb="close" aria-label="Закрыть">✕</button>
+  <button class="lb-btn lb-prev" data-lb="-1" aria-label="Предыдущее фото">‹</button>
+  <img id="lightboxImg" alt="">
+  <button class="lb-btn lb-next" data-lb="1" aria-label="Следующее фото">›</button>
+  <span class="lb-count" id="lightboxCount"></span>
+</div>
 <div id="toast" hidden></div>
 </body>
 </html>

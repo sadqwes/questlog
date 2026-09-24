@@ -193,16 +193,17 @@ func (s *Store) Snapshot(ctx context.Context) (*model.Progress, error) {
 	if p.Meals, err = s.Meals(ctx); err != nil {
 		return nil, err
 	}
-	rows, err = s.pool.Query(ctx, `SELECT to_char(day, 'YYYY-MM-DD'), comment FROM food_days WHERE comment <> ''`)
+	rows, err = s.pool.Query(ctx, `SELECT to_char(day, 'YYYY-MM-DD'), comment, water FROM food_days`)
 	if err != nil {
 		return nil, err
 	}
 	if err := eachRow(rows, func() error {
-		var day, c string
-		if err := rows.Scan(&day, &c); err != nil {
+		var day string
+		var fd model.FoodDay
+		if err := rows.Scan(&day, &fd.Comment, &fd.Water); err != nil {
 			return err
 		}
-		p.FoodDays[day] = c
+		p.FoodDays[day] = fd
 		return nil
 	}); err != nil {
 		return nil, err
@@ -469,6 +470,13 @@ func (s *Store) DeleteMeal(ctx context.Context, id int64) ([]string, error) {
 		return nil, ErrNotFound
 	}
 	return photos, err
+}
+
+func (s *Store) SetWater(ctx context.Context, day string, glasses int) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO food_days (day, water) VALUES ($1::date, $2)
+		ON CONFLICT (day) DO UPDATE SET water = EXCLUDED.water, updated_at = now()`, day, glasses)
+	return err
 }
 
 func (s *Store) SetFoodDay(ctx context.Context, day, comment string) error {

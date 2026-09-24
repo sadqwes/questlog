@@ -72,6 +72,12 @@ type Meal struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+// FoodDay — то, что относится ко дню целиком, а не к одному приёму пищи.
+type FoodDay struct {
+	Comment string `json:"comment"`
+	Water   int    `json:"water"` // стаканов воды
+}
+
 var MealKinds = map[string]bool{"breakfast": true, "lunch": true, "dinner": true, "snack": true, "drink": true}
 
 type Progress struct {
@@ -84,7 +90,7 @@ type Progress struct {
 	Arena     []ArenaEntry                `json:"arena"`
 	Hero      string                      `json:"hero"`
 	Meals     []Meal                      `json:"meals"`
-	FoodDays  map[string]string           `json:"foodDays"` // день → комментарий наставника
+	FoodDays  map[string]FoodDay          `json:"foodDays"` // день → вода и комментарий наставника
 }
 
 func NewProgress() *Progress {
@@ -97,6 +103,6 @@ func NewProgress() *Progress {
 		Guides:    map[string]map[string]Guide{},
 		Arena:     []ArenaEntry{},
 		Meals:     []Meal{},
-		FoodDays:  map[string]string{},
+		FoodDays:  map[string]FoodDay{},
 	}
 }

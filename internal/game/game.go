@@ -89,6 +89,7 @@ type Counters struct {
 	EnAnswers  int  `json:"enAnswers"`
 	Meals      int  `json:"meals"`
 	FoodDays   int  `json:"foodDays"` // дней хотя бы с одной записью
+	WaterBest  int  `json:"waterBest"`
 }
 
 type Stats struct {
@@ -221,6 +222,11 @@ func Compute(p *plan.Plan, pr *model.Progress) Stats {
 		days[m.Day] = true
 	}
 	c.FoodDays = len(days)
+	for _, fd := range pr.FoodDays {
+		if fd.Water > c.WaterBest {
+			c.WaterBest = fd.Water
+		}
+	}
 
 	total := extra
 	skills := map[string]Bar{}
@@ -264,6 +270,7 @@ func achievements(c Counters) []Achievement {
 		{"brave", "!", "Смелость", "Первый ответ на арене по-английски", c.EnAnswers >= 1},
 		{"meal1", "Ф", "Честная тарелка", "Первая запись в дневнике питания — любая еда считается", c.Meals >= 1},
 		{"meal7", "7", "Неделя дневника", "Записи о еде в 7 разных дней", c.FoodDays >= 7},
+		{"water6", "В", "Капля за каплей", "6 стаканов воды за один день", c.WaterBest >= 6},
 	}
 	out := make([]Achievement, 0, len(list))
 	for _, a := range list {

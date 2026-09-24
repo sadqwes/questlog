@@ -146,8 +146,16 @@ func (m *memStore) DeleteMeal(_ context.Context, id int64) ([]string, error) {
 	}
 	return nil, store.ErrNotFound
 }
+func (m *memStore) SetWater(_ context.Context, day string, n int) error {
+	fd := m.p.FoodDays[day]
+	fd.Water = n
+	m.p.FoodDays[day] = fd
+	return nil
+}
 func (m *memStore) SetFoodDay(_ context.Context, day, c string) error {
-	m.p.FoodDays[day] = c
+	fd := m.p.FoodDays[day]
+	fd.Comment = c
+	m.p.FoodDays[day] = fd
 	return nil
 }
 
@@ -315,10 +323,31 @@ func TestFoodDiaryWithPhoto(t *testing.T) {
 		t.Errorf("food counters = %+v", st.Stats.Counters)
 	}
 
+	if r, b := do(t, ts, "PUT", "/api/food-days/2026-09-24/water", `{"glasses":6}`); r.StatusCode != 200 {
+		t.Errorf("water = %d %s", r.StatusCode, b)
+	} else {
+		json.Unmarshal(b, &st)
+		if st.Progress.FoodDays["2026-09-24"].Water != 6 || !achieved(st, "water6") {
+			t.Errorf("water not saved or achievement missing: %+v", st.Progress.FoodDays["2026-09-24"])
+		}
+	}
+	if r, _ := do(t, ts, "PUT", "/api/food-days/2026-09-24/water", `{"glasses":99}`); r.StatusCode != 400 {
+		t.Error("99 glasses accepted")
+	}
+
 	if r, _ := do(t, ts, "DELETE", "/api/meals/1", ""); r.StatusCode != 204 {
 		t.Errorf("delete meal = %d", r.StatusCode)
 	}
 	if r, _ := do(t, ts, "GET", "/api/photos/"+key, ""); r.StatusCode != 404 {
 		t.Error("photo still served after meal was deleted")
 	}
+}
+
+func achieved(st State, id string) bool {
+	for _, a := range st.Stats.Achievements {
+		if a.ID == id {
+			return a.Got
+		}
+	}
+	return false
 }

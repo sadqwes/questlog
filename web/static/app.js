@@ -192,7 +192,8 @@
       ${meals.length
         ? `<div class="row"><span class="chip">${meals.length} ${plural(meals.length, 'запись', 'записи', 'записей')}</span>
            <span class="chip ${prot ? 'ok' : ''}">белок: ${prot}</span><span class="chip ${veg ? 'ok' : ''}">овощи: ${veg}</span></div>`
-        : '<p class="muted">Записей пока нет. Отправь фото еды мне в чат или добавь запись в дневнике.</p>'}`;
+        : '<p class="muted">Записей пока нет. Отправь фото еды мне в чат или добавь запись в дневнике.</p>'}
+      ${waterRow(day)}`;
   }
 
   function plural(n, one, few, many) {
@@ -204,11 +205,12 @@
 
   // ---------- питание ----------
   function renderFood() {
-    const meals = mealsOf(foodDay), comment = S.progress.foodDays[foodDay];
+    const meals = mealsOf(foodDay), fdd = S.progress.foodDays[foodDay] || {}, comment = fdd.comment;
     const today = localKey(new Date());
     let h = `<div class="day-head"><div><div class="label">${DOW_FULL[dowOf(foodDay)]}</div><h1>${human(foodDay)}</h1></div>
       <div class="day-nav"><button class="btn" data-fnav="-1" aria-label="Предыдущий день">←</button><button class="btn" data-fnav="0">Сегодня</button>
       <button class="btn" data-fnav="1" aria-label="Следующий день"${foodDay >= today ? ' disabled' : ''}>→</button></div></div>`;
+    h += waterRow(foodDay);
     if (comment) h += `<div class="comment"><span class="label">Наставник о дне</span><div class="guide">${md(comment)}</div></div>`;
     h += meals.length ? '<div class="meals">' + meals.map(mealCard).join('') + '</div>'
       : '<p class="muted">В этот день записей нет — и это нормально. Можно добавить запись ниже или прислать фото мне в чат.</p>';
@@ -218,14 +220,36 @@
     renderFoodWeek();
   }
 
+  const GLASS_GOAL = 8; // 8 стаканов по 250 мл ≈ 2 литра
+
+  function waterRow(day) {
+    const n = (S.progress.foodDays[day] || {}).water || 0;
+    const cups = Array.from({ length: Math.max(GLASS_GOAL, n) }, (_, i) => `<span class="glass${i < n ? ' full' : ''}"></span>`).join('');
+    return `<div class="water"><b>Вода</b><span class="glasses" aria-label="${n} из ${GLASS_GOAL} стаканов">${cups}</span>
+      <span class="muted small">${n} ${plural(n, 'стакан', 'стакана', 'стаканов')} · ≈${(n * 0.25).toFixed(2).replace(/\.?0+$/, '')} л</span>
+      <span class="row"><button class="btn" data-water="${esc(day)}" data-dw="-1" aria-label="Убрать стакан"${n ? '' : ' disabled'}>−</button>
+      <button class="btn primary" data-water="${esc(day)}" data-dw="1">+ стакан</button></span></div>`;
+  }
+
+  function mealEditForm(m) {
+    return `<div class="meal-edit">
+      <div class="form-grid">
+        <label class="field">Что это<select data-edit-kind>${MEAL_KINDS.map(([k, n]) => `<option value="${k}"${m.kind === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="field">Время<input type="time" data-edit-at value="${esc(m.at)}"></label>
+      </div>
+      <label class="field">Описание<textarea data-edit-desc rows="3">${esc(m.description)}</textarea></label>
+      <div class="row"><button class="btn primary" data-save-meal="${m.id}">Сохранить</button><button class="btn" data-cancel-edit="${m.id}">Отмена</button></div></div>`;
+  }
+
   function mealCard(m) {
-    const confirm = drafts['del:' + m.id];
+    const confirm = drafts['del:' + m.id], editing = drafts['edit:' + m.id];
+    const toggle = (field, on, yes, no) => `<button class="chip btnchip ${on ? 'ok' : ''}" data-toggle="${field}" data-meal="${m.id}" aria-pressed="${on}" title="Нажми, чтобы переключить">${on ? yes : no}</button>`;
     return `<article class="meal"><div class="meal-head"><span class="meal-kind">${esc(kindName(m.kind))}${m.at ? ` · <span class="muted">${esc(m.at)}</span>` : ''}</span>
-      <span class="row"><span class="chip ${m.protein ? 'ok' : ''}">${m.protein ? 'белок ✓' : 'без белка'}</span><span class="chip ${m.veggies ? 'ok' : ''}">${m.veggies ? 'овощи ✓' : 'без овощей'}</span></span></div>
-      <p>${esc(m.description)}</p>
-      ${m.photos.length ? `<div class="photos">${m.photos.map(k => `<button data-photo="${esc(k)}" aria-label="Открыть фото"><img src="/api/photos/${esc(k)}" loading="lazy" alt="${esc(m.description)}"></button>`).join('')}</div>` : ''}
+      <span class="row">${toggle('protein', m.protein, 'белок ✓', 'без белка')}${toggle('veggies', m.veggies, 'овощи ✓', 'без овощей')}</span></div>
+      ${editing ? mealEditForm(m) : `<p>${esc(m.description)}</p>`}
+      ${m.photos.length ? `<div class="photos">${m.photos.map((k, i) => `<button data-photo="${esc(k)}" data-meal="${m.id}" data-idx="${i}" aria-label="Открыть фото ${i + 1} из ${m.photos.length}"><img src="/api/photos/${esc(k)}" loading="lazy" alt="${esc(m.description)}"></button>`).join('')}</div>` : ''}
       ${m.comment ? `<div class="comment"><span class="label">Наставник</span><div class="guide">${md(m.comment)}</div></div>` : ''}
-      <div class="row"><button class="btn danger" data-del-meal="${m.id}">${confirm ? 'Точно удалить?' : 'Удалить'}</button></div></article>`;
+      <div class="row">${editing ? '' : `<button class="btn" data-edit-meal="${m.id}">Изменить</button>`}<button class="btn danger" data-del-meal="${m.id}">${confirm ? 'Точно удалить?' : 'Удалить'}</button></div></article>`;
   }
 
   function defaultKind() {
@@ -472,10 +496,41 @@
   // ---------- события ----------
   document.addEventListener('click', e => {
     const t = e.target;
-    const lb = t.closest('#lightbox');
-    if (lb) { lb.hidden = true; return; }
+    const lbBtn = t.closest('[data-lb]');
+    if (lbBtn) { lbBtn.dataset.lb === 'close' ? closeGallery() : stepGallery(+lbBtn.dataset.lb); return; }
+    if (t.id === 'lightbox') { closeGallery(); return; } // клик по тёмному фону
     const ph = t.closest('[data-photo]');
-    if (ph) { $('lightboxImg').src = '/api/photos/' + ph.dataset.photo; $('lightbox').hidden = false; return; }
+    if (ph) {
+      const meal = S.progress.meals.find(m => String(m.id) === ph.dataset.meal);
+      openGallery(meal ? meal.photos : [ph.dataset.photo], +ph.dataset.idx || 0);
+      return;
+    }
+    const wbtn = t.closest('[data-water]');
+    if (wbtn) {
+      const day = wbtn.dataset.water, n = ((S.progress.foodDays[day] || {}).water || 0) + (+wbtn.dataset.dw);
+      mutate('PUT', `/api/food-days/${day}/water`, { glasses: Math.max(0, n) }, 'вода');
+      return;
+    }
+    const tg = t.closest('[data-toggle]');
+    if (tg) {
+      const m = S.progress.meals.find(x => String(x.id) === tg.dataset.meal);
+      if (m) mutate('PATCH', '/api/meals/' + m.id, { [tg.dataset.toggle]: !m[tg.dataset.toggle] });
+      return;
+    }
+    const ed = t.closest('[data-edit-meal]');
+    if (ed) { drafts['edit:' + ed.dataset.editMeal] = true; render(); return; }
+    const ce = t.closest('[data-cancel-edit]');
+    if (ce) { delete drafts['edit:' + ce.dataset.cancelEdit]; render(); return; }
+    const sv = t.closest('[data-save-meal]');
+    if (sv) {
+      const box = sv.closest('.meal-edit'), id = sv.dataset.saveMeal;
+      const description = box.querySelector('[data-edit-desc]').value.trim();
+      if (!description) { toast('Описание не может быть пустым'); return; }
+      mutate('PATCH', '/api/meals/' + id, {
+        kind: box.querySelector('[data-edit-kind]').value, at: box.querySelector('[data-edit-at]').value, description,
+      }).then(ok => { if (ok) { delete drafts['edit:' + id]; render(); } });
+      return;
+    }
     const tile = t.closest('.tile');
     if (tile) { sel = +tile.dataset.i; openGuide = null; location.hash = '#/today'; return; }
     const fd = t.closest('[data-food-day]');
@@ -534,7 +589,42 @@
     if (dn) mutate('PATCH', '/api/arena/' + dn.dataset.dunno, { answer: 'Не знаю' }).then(ok => { if (ok) toast('Это нормально — разберём тему с нуля'); });
   });
 
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').hidden = true; });
+  // ---------- галерея фото ----------
+  const gallery = { photos: [], idx: 0 };
+  function openGallery(photos, idx) {
+    gallery.photos = photos; gallery.idx = idx;
+    showGallery();
+    $('lightbox').hidden = false;
+  }
+  function showGallery() {
+    const n = gallery.photos.length;
+    $('lightboxImg').src = '/api/photos/' + gallery.photos[gallery.idx];
+    $('lightboxCount').textContent = n > 1 ? `${gallery.idx + 1} / ${n}` : '';
+    document.querySelectorAll('.lb-prev,.lb-next').forEach(b => { b.hidden = n < 2; });
+  }
+  function stepGallery(d) {
+    const n = gallery.photos.length;
+    if (n < 2) return;
+    gallery.idx = (gallery.idx + d + n) % n; // по кругу: после последнего — снова первое
+    showGallery();
+  }
+  function closeGallery() { $('lightbox').hidden = true; $('lightboxImg').removeAttribute('src'); }
+
+  document.addEventListener('keydown', e => {
+    if ($('lightbox').hidden) return;
+    if (e.key === 'Escape') closeGallery();
+    else if (e.key === 'ArrowRight') stepGallery(1);
+    else if (e.key === 'ArrowLeft') stepGallery(-1);
+  });
+  // свайп на телефоне
+  let touchX = null;
+  $('lightbox').addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
+  $('lightbox').addEventListener('touchend', e => {
+    if (touchX == null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    touchX = null;
+    if (Math.abs(dx) > 50) stepGallery(dx < 0 ? 1 : -1);
+  });
 
   document.addEventListener('submit', e => { if (e.target.id === 'mealForm') saveMeal(e); });
 
@@ -574,7 +664,8 @@
 
   // Наставник пишет разборы и записи о еде через API — подтягиваем их, пока вкладка открыта.
   const typing = () => { const a = document.activeElement; return a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT' || a.tagName === 'SELECT'); };
-  const quiet = () => S && !busy && !pendingFiles.length && document.visibilityState === 'visible' && !typing();
+  const editing = () => Object.keys(drafts).some(k => k.startsWith('edit:'));
+  const quiet = () => S && !busy && !pendingFiles.length && !editing() && document.visibilityState === 'visible' && !typing();
   setInterval(() => { if (quiet()) load(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (quiet()) load(); });
 
